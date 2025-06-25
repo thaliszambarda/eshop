@@ -3,9 +3,6 @@
   "version": "0.0.1",
   "private": true,
   "nx": {
-    "implicitDependencies": [
-      "@eshop/auth-service"
-    ],
     "targets": {
       "e2e": {
         "executor": "@nx/jest:jest",
