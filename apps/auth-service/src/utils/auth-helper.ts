@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import redis from '@packages/libs/redis';
 import { sendEmail } from './sendEmail';
 import prisma from '@packages/libs/prisma';
+import bcrypt from 'bcryptjs';
 
 const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -33,7 +34,7 @@ export const checkOtpRestrictions = async (email: string, next: NextFunction) =>
   }
 }
 
-export const trackOtpRestrictions = async (email: string, next: NextFunction) => {
+export const trackOtpRequests = async (email: string, next: NextFunction) => {
   const otpRequestKey = `otp_request_count:${email}`;
 
   let otpRequests = parseInt((await redis.get(otpRequestKey)) || '0');
@@ -84,20 +85,24 @@ export const handleForgotPassword = async (req: Request, res: Response, next: Ne
       throw new ValidationError('All fields are required!');
     }
 
-    const user = userType === 'user' && await prisma.users.findUnique({
+    const user = userType === 'user' ? (await prisma.users.findUnique({
       where: {
         email
       }
-    });
+    })) : (await prisma.sellers.findUnique({
+      where: {
+        email
+      }
+    }))
 
     if (!user) {
       throw new ValidationError(`${userType} not found!`);
     }
 
     await checkOtpRestrictions(email, next);
-    await trackOtpRestrictions(email, next);
+    await trackOtpRequests(email, next);
 
-    await sendOtp(user.name, email, userType === 'user' ? "forgot-password-mail" : "forgot-password-mail");
+    await sendOtp(user.name, email, userType === 'user' ? "forgot-password-user-mail" : "forgot-password-seller-mail");
 
     res.status(200).json({
       message: 'OTP sent to email. Please verify your account.'
@@ -124,3 +129,80 @@ export const verifyForgotPasswordOtp = async (req: Request, res: Response, next:
     next(error);
   }
 }
+
+export const verifySeller = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { name, email, otp, password, phone_number, country } = req.body;
+
+    if (!name || !email || !otp || !password || !phone_number || !country) {
+      return next(new ValidationError('All fields are required!'));
+    }
+
+    const existingSeller = await prisma.sellers.findUnique({
+      where: {
+        email
+      }
+    });
+
+    if (existingSeller) {
+      return next(new ValidationError('Seller already exists with this email!'));
+    }
+
+    await verifyOtp(email, otp, next);
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await prisma.sellers.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        country,
+        phone_number,
+      }
+    });
+
+    res.status(201).json({
+      message: 'Seller registered successfully!'
+    })
+  } catch (error) {
+    next(error);
+  }
+}
+
+export const createShop = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { name, bio, address, opening_hours, website, category, sellerId } = req.body;
+
+    if (!name || !bio || !address || !opening_hours || !website || !category || !sellerId) {
+      return next(new ValidationError('All fields are required!'));
+    }
+
+    const shopData = {
+      name,
+      bio,
+      address,
+      opening_hours,
+      website,
+      category,
+      sellerId
+    }
+
+    if (website && website.trim() !== '') {
+      shopData.website = website;
+    }
+
+    const shop = await prisma.shops.create({
+      data: shopData
+    });
+
+    res.status(201).json({
+      success: true,
+      shop
+    })
+
+  } catch (error) {
+    next(error);
+  }
+}
+
