@@ -14,13 +14,15 @@ datasource db {
 }
 
 model images {
-  id      String  @id @default(auto()) @map("_id") @db.ObjectId
-  file_id String
-  urL     String
-  userId  String? @unique @db.ObjectId
-  shopId  String? @unique @db.ObjectId
-  users   users?  @relation(fields: [userId], references: [id])
-  shops   shops?  @relation(fields: [shopId], references: [id])
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  file_id    String
+  urL        String
+  userId     String?   @unique @db.ObjectId
+  shopId     String?   @unique @db.ObjectId
+  users      users?    @relation(fields: [userId], references: [id])
+  shops      shops?    @relation(fields: [shopId], references: [id])
+  products   products? @relation(fields: [productsId], references: [id])
+  productsId String?   @db.ObjectId
 }
 
 model users {
@@ -64,6 +66,7 @@ model shops {
   sellers       sellers[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  products      products[]
 }
 
 model sellers {
@@ -79,4 +82,60 @@ model sellers {
   updatedAt    DateTime @updatedAt
   shopId       String?  @db.ObjectId
   shopsId      String?  @db.ObjectId
+}
+
+model site_config {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  categories    String[]
+  subCategories Json
+}
+
+model discount_codes {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  public_name   String
+  discountType  String
+  discountValue Float
+  discountCode  String   @unique
+  sellerId      String   @db.ObjectId
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum productStatus {
+  Active
+  Pending
+  Draft
+}
+
+model products {
+  id                   String        @id @default(auto()) @map("_id") @db.ObjectId
+  title                String
+  slug                 String        @unique
+  category             String
+  subCategory          String
+  short_description    String
+  detailed_description String
+  images               images[]
+  video_url            String?
+  tags                 String[]
+  brand                String?
+  colors               String[]
+  sizes                String[]
+  starting_date        DateTime?
+  ending_date          DateTime?
+  stock                Int
+  sale_price           Float
+  regular_price        Float
+  ratings              Float         @default(5)
+  warranty             String?
+  custom_specification Json?
+  custom_properties    Json
+  isDeleted            Boolean?      @default(false)
+  cashOnDelevery       String?
+  discount_codes       String[]      @db.ObjectId
+  status               productStatus @default(Active)
+  deletedAt            DateTime?
+  createdAt            DateTime      @default(now())
+  shopId               String        @db.ObjectId
+  shop                 shops         @relation(fields: [shopId], references: [id])
 }
